@@ -10,5 +10,6 @@
     <string name="up">Up</string>
     <string name="a11y_share_fab_content_desc">share</string>
     <string name="img_transition_name">transition_image</string>
+    <string name="fab_transition">fab_transition</string>
 
 </resources>

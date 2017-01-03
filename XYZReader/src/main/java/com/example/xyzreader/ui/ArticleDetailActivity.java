@@ -12,11 +12,12 @@ import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentStatePagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.support.v7.app.AppCompatActivity;
-import android.transition.TransitionInflater;
+import android.util.Log;
 import android.util.TypedValue;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
+import android.widget.FrameLayout;
 
 import com.example.xyzreader.R;
 import com.example.xyzreader.data.ArticleLoader;
@@ -26,7 +27,7 @@ import com.example.xyzreader.data.ItemsContract;
  * An activity representing a single Article detail screen, letting you swipe between articles.
  */
 public class ArticleDetailActivity extends AppCompatActivity
-        implements LoaderManager.LoaderCallbacks<Cursor> {
+        implements LoaderManager.LoaderCallbacks<Cursor>,ArticleDetailFragment.CallBack {
 
     private Cursor mCursor;
     private long mStartId;
@@ -40,6 +41,9 @@ public class ArticleDetailActivity extends AppCompatActivity
     private View mUpButtonContainer;
     private View mUpButton;
     private TabLayout mTabLayout;
+    private ObservableScrollView mScrollView;
+    private FrameLayout mMainLayout;
+    private float[] mLastTranlations;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -52,7 +56,7 @@ public class ArticleDetailActivity extends AppCompatActivity
         setContentView(R.layout.activity_article_detail);
 
         getSupportLoaderManager().initLoader(0, null, this);
-
+        mMainLayout = (FrameLayout) findViewById(R.id.detail_ac_main);
         mPagerAdapter = new MyPagerAdapter(getSupportFragmentManager());
         mPager = (ViewPager) findViewById(R.id.pager);
         mTabLayout = (TabLayout) findViewById(R.id.pager_indicator);
@@ -68,6 +72,9 @@ public class ArticleDetailActivity extends AppCompatActivity
                 mUpButton.animate()
                         .alpha((state == ViewPager.SCROLL_STATE_IDLE) ? 1f : 0f)
                         .setDuration(300);
+                mTabLayout.animate()
+                        .alpha((state == ViewPager.SCROLL_STATE_IDLE) ? 1f : 0f)
+                        .setDuration(300);
             }
 
             @Override
@@ -76,12 +83,16 @@ public class ArticleDetailActivity extends AppCompatActivity
                     mCursor.moveToPosition(position);
                 }
                 mSelectedItemId = mCursor.getLong(ArticleLoader.Query._ID);
+                ArticleDetailFragment f=(ArticleDetailFragment)
+                        mPagerAdapter.instantiateItem(mPager, mPager.getCurrentItem());
+                if(f != null){
+                    mTabLayout.setY(f.getTabTranslation());
+                }
                 updateUpButtonPosition();
             }
         });
-
+        mTabLayout.setupWithViewPager(mPager,true);
         mUpButtonContainer = findViewById(R.id.up_container);
-
         mUpButton = findViewById(R.id.action_up);
         mUpButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -100,8 +111,10 @@ public class ArticleDetailActivity extends AppCompatActivity
                     updateUpButtonPosition();
                     return windowInsets;
                 }
-            });
+            }); 
         }
+//
+
 
 
         if (savedInstanceState == null) {
@@ -111,7 +124,9 @@ public class ArticleDetailActivity extends AppCompatActivity
             }
         }
 
+
     }
+
 
     @Override
     public Loader<Cursor> onCreateLoader(int i, Bundle bundle) {
@@ -122,7 +137,9 @@ public class ArticleDetailActivity extends AppCompatActivity
     public void onLoadFinished(Loader<Cursor> cursorLoader, Cursor cursor) {
         mCursor = cursor;
         mPagerAdapter.notifyDataSetChanged();
-        mTabLayout.setupWithViewPager(mPager,true);
+        mLastTranlations = new float[mPagerAdapter.getCount()];
+
+
         // Select the start ID
         if (mStartId > 0) {
             mCursor.moveToFirst();
@@ -138,6 +155,7 @@ public class ArticleDetailActivity extends AppCompatActivity
             mStartId = 0;
         }
     }
+
 
     @Override
     public void onLoaderReset(Loader<Cursor> cursorLoader) {
@@ -155,6 +173,18 @@ public class ArticleDetailActivity extends AppCompatActivity
     private void updateUpButtonPosition() {
         int upButtonNormalBottom = mTopInset + mUpButton.getHeight();
         mUpButton.setTranslationY(Math.min(mSelectedItemUpButtonFloor - upButtonNormalBottom, 0));
+    }
+
+    @Override
+    public void onTabTranslationChanged(float transLationY) {
+        if(transLationY > 10){
+            mTabLayout.setAlpha(1f);
+        }
+        else {
+            mTabLayout.setAlpha(0f);
+        }
+
+        mTabLayout.setY(transLationY);
     }
 
     private class MyPagerAdapter extends FragmentStatePagerAdapter {

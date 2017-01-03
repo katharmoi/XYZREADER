@@ -1,5 +1,6 @@
 package com.example.xyzreader.ui;
 
+import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Bitmap;
@@ -9,10 +10,13 @@ import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
 import android.os.Bundle;
+import android.support.design.widget.FloatingActionButton;
+import android.support.v4.app.ActivityOptionsCompat;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.LoaderManager;
 import android.support.v4.app.ShareCompat;
 import android.support.v4.content.Loader;
+import android.support.v4.view.ViewCompat;
 import android.support.v7.graphics.Palette;
 import android.text.Html;
 import android.text.format.DateUtils;
@@ -21,6 +25,7 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -44,7 +49,8 @@ public class ArticleDetailFragment extends Fragment implements
     private Cursor mCursor;
     private long mItemId;
     private View mRootView;
-    private int mMutedColor = 0xFF333333;
+    private int mMutedColor = 0x33333333;
+    private int mStatusBarColor;
     private ObservableScrollView mScrollView;
     private DrawInsetsFrameLayout mDrawInsetsFrameLayout;
     private ColorDrawable mStatusBarColorDrawable;
@@ -55,6 +61,9 @@ public class ArticleDetailFragment extends Fragment implements
     private int mScrollY;
     private boolean mIsCard = false;
     private int mStatusBarFullOpacityBottom;
+    private View mTabHolder;
+    private FloatingActionButton mFab;
+    private Typeface mFont;
 
     /**
      * Mandatory empty constructor for the fragment manager to instantiate the
@@ -82,6 +91,7 @@ public class ArticleDetailFragment extends Fragment implements
         mIsCard = getResources().getBoolean(R.bool.detail_is_card);
         mStatusBarFullOpacityBottom = getResources().getDimensionPixelSize(
                 R.dimen.detail_card_top_margin);
+        mStatusBarColor = getResources().getColor(R.color.primary_dark);
         setHasOptionsMenu(true);
     }
 
@@ -98,12 +108,23 @@ public class ArticleDetailFragment extends Fragment implements
         // fragments because their mIndex is -1 (haven't been added to the activity yet). Thus,
         // we do this in onActivityCreated.
         getLoaderManager().initLoader(0, null, this);
-    }
 
+    }
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
             Bundle savedInstanceState) {
         mRootView = inflater.inflate(R.layout.fragment_article_detail, container, false);
+
+        mTabHolder =mRootView.findViewById(R.id.tab_holder);
+        mTabHolder.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+            @Override
+            public void onLayoutChange(View view, int i, int i1, int i2, int i3, int i4, int i5, int i6, int i7) {
+                view.removeOnLayoutChangeListener(this);
+                getActivityCast().onTabTranslationChanged
+                        ( mTabHolder.getY()-mTabHolder.getHeight()/2 -(mScrollY/PARALLAX_FACTOR) );
+            }
+        });
+
         mDrawInsetsFrameLayout = (DrawInsetsFrameLayout)
                 mRootView.findViewById(R.id.draw_insets_frame_layout);
         mDrawInsetsFrameLayout.setOnInsetsCallback(new DrawInsetsFrameLayout.OnInsetsCallback() {
@@ -122,29 +143,40 @@ public class ArticleDetailFragment extends Fragment implements
                 if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP){
                     mPhotoContainerView.setTranslationY((int) (mScrollY - mScrollY / PARALLAX_FACTOR));
                     mPhotoContainerView.setElevation(4.0f);
+                    getActivityCast().onTabTranslationChanged( mTabHolder.getY()-mTabHolder.getHeight()/2 -( mScrollY / PARALLAX_FACTOR));
+                }else{
+                    getActivityCast().onTabTranslationChanged( mTabHolder.getY()-mTabHolder.getHeight()/2 -mScrollY );
                 }
+
                 updateStatusBar();
             }
         });
+
 
         mPhotoView = (ImageView) mRootView.findViewById(R.id.photo);
         mPhotoContainerView = mRootView.findViewById(R.id.photo_container);
 
         mStatusBarColorDrawable = new ColorDrawable(0);
 
-        mRootView.findViewById(R.id.share_fab).setOnClickListener(new View.OnClickListener() {
+        mFab = (FloatingActionButton) mRootView.findViewById(R.id.share_fab);
+        mFab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                startActivity(Intent.createChooser(ShareCompat.IntentBuilder.from(getActivity())
-                        .setType("text/plain")
-                        .setText("Some sample text")
-                        .getIntent(), getString(R.string.action_share)));
+                Intent intent = new Intent(getContext(),ShareActivity.class);
+                ActivityOptionsCompat optionsCompat = ActivityOptionsCompat.makeSceneTransitionAnimation(
+                        getActivity(),mFab,getString(R.string.fab_transition));
+                startActivity(intent,optionsCompat.toBundle());
             }
         });
-
         bindViews();
         updateStatusBar();
         return mRootView;
+    }
+
+    @Override
+    public void onAttach(Context context) {
+        super.onAttach(context);
+        mFont = Typeface.createFromAsset(getActivity().getAssets(),"NunitoSans-Regular.ttf");
     }
 
     private void updateStatusBar() {
@@ -154,9 +186,9 @@ public class ArticleDetailFragment extends Fragment implements
                     mStatusBarFullOpacityBottom - mTopInset * 3,
                     mStatusBarFullOpacityBottom - mTopInset);
             color = Color.argb((int) (255 * f),
-                    (int) (Color.red(mMutedColor) * 0.9),
-                    (int) (Color.green(mMutedColor) * 0.9),
-                    (int) (Color.blue(mMutedColor) * 0.9));
+                    (int) (Color.red(mStatusBarColor) * 0.9),
+                    (int) (Color.green(mStatusBarColor) * 0.9),
+                    (int) (Color.blue(mStatusBarColor) * 0.9));
         }
         mStatusBarColorDrawable.setColor(color);
         mDrawInsetsFrameLayout.setInsetBackground(mStatusBarColorDrawable);
@@ -185,7 +217,7 @@ public class ArticleDetailFragment extends Fragment implements
         TextView bylineView = (TextView) mRootView.findViewById(R.id.article_byline);
         bylineView.setMovementMethod(new LinkMovementMethod());
         TextView bodyView = (TextView) mRootView.findViewById(R.id.article_body);
-        bodyView.setTypeface(Typeface.createFromAsset(getResources().getAssets(), "Rosario-Regular.ttf"));
+        bodyView.setTypeface(mFont);
 
         if (mCursor != null) {
             mRootView.setAlpha(0);
@@ -210,8 +242,10 @@ public class ArticleDetailFragment extends Fragment implements
                                 Palette p = Palette.generate(bitmap, 12);
                                 mMutedColor = p.getDarkMutedColor(0xFF333333);
                                 mPhotoView.setImageBitmap(imageContainer.getBitmap());
-                                mRootView.findViewById(R.id.meta_bar)
-                                        .setBackgroundColor(mMutedColor);
+                                int transparentMutedColor = Color.argb(80, Color.red(mMutedColor),
+                                        Color.green(mMutedColor), Color.blue(mMutedColor));
+                                View metaBar = mRootView.findViewById(R.id.meta_bar);
+                                metaBar.setBackgroundColor(transparentMutedColor);
                                 updateStatusBar();
                             }
                         }
@@ -251,7 +285,6 @@ public class ArticleDetailFragment extends Fragment implements
             mCursor.close();
             mCursor = null;
         }
-
         bindViews();
     }
 
@@ -270,5 +303,22 @@ public class ArticleDetailFragment extends Fragment implements
         return mIsCard
                 ? (int) mPhotoContainerView.getTranslationY() + mPhotoView.getHeight() - mScrollY
                 : mPhotoView.getHeight() - mScrollY;
+    }
+    public float getTabTranslation(){
+       if(mTabHolder == null || mTabHolder.getHeight() == 0){
+           return Float.MAX_VALUE;
+       }
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP){
+            return mTabHolder.getY() -mTabHolder.getHeight()/2 -(mScrollY/PARALLAX_FACTOR);
+        }else
+        {
+            return mTabHolder.getY() -mTabHolder.getHeight()/2 -mScrollY;
+        }
+
+
+    }
+
+    public interface CallBack{
+       void onTabTranslationChanged(float transLationY);
     }
 }
